@@ -134,6 +134,7 @@ static char DecideDistTableReplicationModel(char distributionMethod,
 static List * HashSplitPointsForShardList(List *shardList);
 static List * HashSplitPointsForShardCount(int shardCount);
 static List * WorkerNodesForShardList(List *shardList);
+static List * NeedsSeparateNodeForShardList(List *shardList);
 static List * RoundRobinWorkerNodeList(List *workerNodeList, int listLength);
 static CitusTableParams DecideCitusTableParams(CitusTableType tableType,
 											   DistributedTableParams *
@@ -571,16 +572,10 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 		colocatedTableId = ColocatedTableId(colocationId);
 	}
 
-	List *workerNodeList = DistributedTablePlacementNodeList(NoLock);
-	if (workerNodeList == NIL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("no worker nodes are available for placing shards"),
-						errhint("Add more worker nodes.")));
-	}
-
 	List *workersForPlacementList;
 	List *shardSplitPointsList;
+	List *needsSeparateNodeForPlacementList;
+
 
 	if (colocatedTableId != InvalidOid)
 	{
@@ -595,6 +590,12 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 		 * Find the node IDs of the shard placements.
 		 */
 		workersForPlacementList = WorkerNodesForShardList(colocatedShardList);
+
+		/*
+		 * Inherit needsseparatenode from the colocated shards.
+		 */
+		needsSeparateNodeForPlacementList =
+			NeedsSeparateNodeForShardList(colocatedShardList);
 	}
 	else
 	{
@@ -606,7 +607,21 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 		/*
 		 * Place shards in a round-robin fashion across all data nodes.
 		 */
+		List *workerNodeList = NewDistributedTablePlacementNodeList(NoLock);
+		if (workerNodeList == NIL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							errmsg("no worker nodes are available for placing shards"),
+							errhint("Add more worker nodes.")));
+		}
+
 		workersForPlacementList = RoundRobinWorkerNodeList(workerNodeList, shardCount);
+
+		/*
+		 * For a new colocation group, needsseparatenode is set to false for
+		 * all shards.
+		 */
+		needsSeparateNodeForPlacementList = GenerateListFromIntElement(false, shardCount);
 	}
 
 	/*
@@ -645,6 +660,7 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 		shardToSplit->shardId,
 		shardSplitPointsList,
 		workersForPlacementList,
+		needsSeparateNodeForPlacementList,
 		distributionColumnOverrides,
 		sourceColocatedShardIntervalList,
 		colocationId
@@ -894,6 +910,26 @@ WorkerNodesForShardList(List *shardList)
 	}
 
 	return nodeIdList;
+}
+
+
+/*
+ * NeedsSeparateNodeForShardList returns a list of node booleans reflecting whether
+ * each shard in the given list needs a separate node.
+ */
+static List *
+NeedsSeparateNodeForShardList(List *shardList)
+{
+	List *needsSeparateNodeList = NIL;
+
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardList)
+	{
+		needsSeparateNodeList = lappend_int(needsSeparateNodeList,
+											shardInterval->needsSeparateNode);
+	}
+
+	return needsSeparateNodeList;
 }
 
 
