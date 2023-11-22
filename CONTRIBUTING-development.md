@@ -2,6 +2,21 @@
 
 * We almost always use **CamelCase**, when naming functions, variables etc., **not snake_case**.
 
+* We also have the habits of using a **lowerCamelCase** for some variables named from their type or from their function name, as shown in the examples:
+
+  ```c
+  AlterTableCmd *alterTableCommand = NULL;
+  
+  ..
+  ..
+  
+  bool
+  IsAlterTableRenameStmt(RenameStmt *renameStmt)
+  {
+    bool isAlterTableRenameStmt = false;
+    ..
+  }
+
 * We **start functions with a comment**:
 
   ```c
