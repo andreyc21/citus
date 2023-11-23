@@ -16,6 +16,7 @@
     bool isAlterTableRenameStmt = false;
     ..
   }
+  ```
 
 * We **start functions with a comment**:
 
