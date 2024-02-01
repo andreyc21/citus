@@ -24,9 +24,10 @@ rm -rf "${basedir}/.git"
 build_ext() {
   pg_major="$1"
 
-  cat /proc/cpuinfo
-  echo "==="
-  cat /proc/meminfo
+  #cat /proc/cpuinfo
+  #echo "==="
+  #cat /proc/meminfo
+  sysctl -a
   echo "==="
   builddir="${basedir}/build-${pg_major}"
   echo "Beginning build for PostgreSQL ${pg_major}..." >&2
